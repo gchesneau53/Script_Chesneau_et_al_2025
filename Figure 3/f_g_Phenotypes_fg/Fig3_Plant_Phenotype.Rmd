@@ -1,0 +1,187 @@
+---
+title: "MetaFlowTrain: a highly-parallelized and modular fluidic system to study exometabolite-mediated inter-organismal communication"
+author: "Chesneau et al., 2025, Guillaume Chesneau"
+date: "06/09/2024"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, autodep = TRUE, warning = FALSE)
+#Set working direction
+knitr::opts_knit$set(root.dir = "") 
+```
+
+This script has been made on R 4.2.2 (and Rstudio 2022.12.0+353)
+```{r R version}
+R.version
+library(ggthemes)
+theme_set(theme_bw())
+```
+
+## 1) Germination rate
+
+
+```{r, echo=FALSE, message=FALSE, fig.show='hide'}
+
+#GERMINATION RATE
+library(ggplot2)
+
+Pheno <- read.table(file="df_phenotype.txt",sep="\t",dec = ".",header=TRUE) 
+Pheno$Length2<- ifelse(Pheno$Length ==0 ,0,
+                                    ifelse(1,1))
+#GLM
+library(lme4)
+library(MASS)
+
+mod.pheno <- glm(Length2 ~ ORGANISM * TREATMENT_1, family = binomial(link = "logit"), data = Pheno)
+
+summary(mod.pheno)
+#check if model fits the data
+1- pchisq(summary(mod.pheno)$deviance,
+          summary(mod.pheno)$df.residual) #OK 0.0009860078
+
+library(car)
+Anova(mod.pheno) 
+
+library(multcompView)
+library(emmeans)
+
+
+emm.pheno.treat <- emmeans(mod.pheno, ~ TREATMENT_1) 
+stat_pheno <- multcomp::cld(emm.pheno.treat, alpha = 0.05, Letters= letters)
+
+emm.pheno.Orga <- emmeans(mod.pheno, ~  ORGANISM |  TREATMENT_1 )
+stat_pheno_Orga <- multcomp::cld(emm.pheno.Orga, alpha = 0.05, Letters= letters)
+
+#Manage data frame for ORGANISM stats
+stat_pheno_Orga <- as.data.frame(stat_pheno_Orga)
+stat_pheno_Orga$Length2 <- c(0)
+stat_pheno_Orga <- data.frame(stat_pheno_Orga)
+
+#Plot             
+
+#Change name
+Pheno$ORGANISM2 <- ifelse(Pheno$ORGANISM == "Media-Media" , "MF","BFSC")
+stat_pheno_Orga$ORGANISM2 <- ifelse(stat_pheno_Orga$ORGANISM == "Media-Media" , "MF","BFSC")
+
+#Order
+Pheno$ORGANISM2 <- factor(Pheno$ORGANISM2, 
+                         levels = c("MF", "BFSC"))
+
+# New facet label names for dose variable
+names_germ <- c(0,1)
+names(names_germ) <- c("Germinated","Not Germinated")
+
+
+# New facet label names for dose variable
+name_soil <- c("Peat","Peat + Plant","Peat + Plant + SynCom")
+names(name_soil) <- c("Peat","Peat+Plant","Peat+Plant+B+F")
+
+
+conta.all.pheno <- ggplot(Pheno, aes(ORGANISM2, fill = factor(Length2, levels=c("0", "1")))) + 
+  geom_bar(position="fill") +
+  labs(fill="CFU detected") +
+  scale_fill_manual("Germination", values=c( "#888686", "#4643433B"),labels = c("Not Germinated", "Germinated")) +
+  facet_wrap(~TREATMENT_1, scales = "free", nrow = 1, labeller = labeller(TREATMENT_1 = name_soil)) +
+  theme(
+        strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        strip.text.y = element_text(size = 12, color = "white"),
+        axis.title.y = element_text( size = 12),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(), 
+        axis.text.y = element_text()) +  
+   ylab ("Germination rate (%)") +
+  geom_text(data    = stat_pheno_Orga, mapping = aes(x = ORGANISM2, y = 1.05, label = .group), size = 4) +
+  theme(legend.position = "bottom")
+
+
+conta.all.pheno
+```
+
+
+## 2) Plant length
+
+```{r, echo=FALSE, message=FALSE, results="hide", fig.show='hide'}
+
+Pheno <- read.table(file="df_phenotype.txt",sep="\t",dec = ".",header=TRUE) 
+
+Pheno <- subset(Pheno, !Length %in% c(0))
+
+#Stats
+str(Pheno)
+Stats_length <- glm.nb(Length ~ TREATMENT_1, data = Pheno)
+Stats_length_ORGA <- glm.nb(Length ~ ORGANISM *TREATMENT_1 , data = Pheno)
+
+summary(Stats_length)
+summary(Stats_length_ORGA)
+
+1- pchisq(summary(Stats_length)$deviance,
+          summary(Stats_length)$df.residual)
+1- pchisq(summary(Stats_length_ORGA)$deviance,
+          summary(Stats_length_ORGA)$df.residual)
+
+Stats_length_f <- emmeans(Stats_length, ~ TREATMENT_1)
+stat_length <- multcomp::cld(Stats_length_f, alpha = 0.05, Letters=letters)
+
+Stats_length_ORGA_f <- emmeans(Stats_length_ORGA, ~  ORGANISM | TREATMENT_1)
+Stats_length_ORGA <- multcomp::cld(Stats_length_ORGA_f, alpha = 0.05, Letters= letters)
+
+Stats_length_ORGA <- data.frame(Stats_length_ORGA)
+
+  
+#Boxplot
+
+#Change name
+Pheno2$ORGANISM2 <- ifelse(Pheno2$ORGANISM == "Media-Media" , "MF","BFSC")
+Stats_length_ORGA$ORGANISM2 <- ifelse(Stats_length_ORGA$ORGANISM == "Media-Media" , "MF","BFSC")
+
+#New group for plotting colors
+Pheno2$ORGANISMEF <- paste(Pheno2$ORGANISM, "-", Pheno2$TREATMENT_1)
+
+#Order
+Pheno2$ORGANISM2 <- factor(Pheno2$ORGANISM2, levels = c ("MF", "BFSC"))
+
+
+
+  Plot_box_root <- ggplot() + 
+  geom_boxplot(data = Pheno2, aes(x = ORGANISM2, y = mean_Length, fill = ORGANISMEF, color = ORGANISMEF), outlier.shape = NA) +
+geom_jitter(data = Pheno2, aes(x = ORGANISM2, y = mean_Length, fill = ORGANISMEF), size = 0.5, alpha = 0.5) +
+#geom_errorbar(data = Root_means_se, aes(ymin=lower_limit, ymax=upper_limit)) +
+  ylab ("Root length (mm)") +
+  ggtitle("")+
+  scale_fill_manual("Microchambers", values=c( "#DDD5D0", "#988071", "#3B312B" ,"white","white","white"),labels = c( "BFSC Peat", "BFSC Peat + Plant", "BFSC Peat + Plant + SynCom","MF Peat", "MF Peat + Plant","MF Peat + Plant + SynCom")) +
+  scale_color_manual("Microchambers", values=c("black", "black", "black","#DDD5D0", "#988071", "#3B312B"),labels = c( "BFSC Peat", "BFSC Peat + Plant", "BFSC Peat + Plant + SynCom","MF Peat", "MF Peat + Plant", "MF Peat + Plant + SynCom")) +
+  facet_wrap(~TREATMENT_1, scales = "free", nrow = 1, labeller = labeller(TREATMENT_1 = name_soil)) +
+  theme(
+        strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        strip.text.y = element_text(size = 12, color = "white"),
+        axis.title.y = element_text( size = 12),
+        axis.title.x = element_blank(),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(), 
+        axis.text.y = element_text()) +  
+   geom_text( data    = Stats_length_ORGA, mapping = aes(x = ORGANISM2, y = 75, label = .group), size = 4) +
+  theme(legend.position = "bottom")
+  Plot_box_root
+```
+
+*****
+
+# End of script
+      
+Author : Guillaume Chesneau     
+[Twitter](https://twitter.com/Chesneau_G).   
+[Researchgate](https://www.researchgate.net/profile/Guillaume-Chesneau-3).   
+[Google Scholar](https://scholar.google.fr/citations?user=ywzDf3QAAAAJ&hl=fr&oi=ao). 
+
+MPIPZ Cologne,  [Hacquard's group](https://www.mpipz.mpg.de/hacquard).   
+
+*****
