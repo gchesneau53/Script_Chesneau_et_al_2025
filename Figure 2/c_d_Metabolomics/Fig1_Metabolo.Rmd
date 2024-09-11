@@ -1,0 +1,736 @@
+---
+title: "MetaFlowTrain: a highly-parallelized and modular fluidic system to study exometabolite-mediated inter-organismal communication"
+author: "Chesneau et al., 2025, Guillaume Chesneau"
+date: "06/09/2024"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, autodep = TRUE, warning = FALSE)
+#Set working direction
+knitr::opts_knit$set(root.dir = "") 
+```
+
+This script has been made on R 4.2.2 (and Rstudio 2022.12.0+353)
+```{r R version}
+R.version
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Palette color
+
+#Prepare palette color for conditions
+
+
+
+  name_Strain <- c("BSC", "FSC", "BFSC", "R09", "R16", "R147", "R318","R329","R420", "R431", "R565","R568", "R651", "R695","F16", "F147", "F212", "F243","C")
+  
+  name_Species <- c("Bacteria","Fungi", "BSC", "FSC", "BFSC", " Pseudomonas R09", " Burkholderia R16D2", " Bacillus R147", " Variovorax R318D1"," Pseudomonas R329"," Flavobacterium R420", " Streptomyces R431", " Achromobacter R565"," Acidovorax R568", " Agrobacterium R651", " Mesorhizobium R695"," Plectosphaerella R16", " Dactylonectria R147", " Fusarium R212", " Dendryphion R243"," Media")
+ 
+   
+  name_Species.x <- c("Bacteria","Fungi", "BSC", "FSC", "BFSC", "Pseudomonas R09", "Burkholderia R16D2", "Bacillus R147", "Variovorax R318D1","Pseudomonas R329","Flavobacterium R420", "Streptomyces R431", "Achromobacter R565","Acidovorax R568", "Agrobacterium R651", "Mesorhizobium R695","Plectosphaerella R16", "Dactylonectria R147", "Fusarium R212", "Dendryphion R243","Media")
+  
+  
+  
+  # desired color palette
+  Palette_Strain <- c("#ff3300", "#00cc44", "#4d0026",  "#2E4057","#5475A0","#A1B5CE","#6C5A49","#C3AB98","#E8E0D8","#69140E","#B42318","#EE8981", "#F56200","#FF9D5C",      "#6BAA75",   "#84DD63", "#CBFF4D", "#BBD686" , "black")
+  
+ Palette_Species <- c("#ff3300", "#00cc44","#ff3300", "#00cc44", "#4d0026",  "#2E4057","#5475A0","#A1B5CE","#6C5A49","#C3AB98","#E8E0D8","#69140E","#B42318","#EE8981", "#F56200","#FF9D5C",      "#6BAA75",   "#84DD63", "#CBFF4D", "#BBD686" , "black")
+ 
+Palette_Species.x <- c("#ff3300", "#00cc44","#ff3300", "#00cc44", "#4d0026",  "#2E4057","#5475A0","#A1B5CE","#6C5A49","#C3AB98","#E8E0D8","#69140E","#B42318","#EE8981", "#F56200","#FF9D5C",      "#6BAA75",   "#84DD63", "#CBFF4D", "#BBD686" , "black") 
+
+     # associated EnvType level
+names(Palette_Strain) <- name_Strain
+names(Palette_Species) <- name_Species
+names(Palette_Species.x) <- name_Species.x
+``` 
+
+
+# A] Targeted Metabolomics
+
+## I] - Preprocessing of data
+This script has been made on R 4.0.0 (and Rstudio 1.2.5019)
+```{r R version}
+# Script made with R
+R.version
+```
+
+Input data are raw peak area table with samples in rows and metabolites in columns.
+Data are preprocessed individually for each run and scaled in order to be compared between runs.
+
+**Pre-processing steps:**. 
+
++ 1- TIC normalization (to remove technical variation due to the period of acquisition of the scans, normalisation between samples).   
++ 2- Log transformation (correct for heteroscedasticity, to convert multiplicative relations into additive relations, and to make skewed distributions (more) symmetric ).   
++ 3- Scaling and Centering of the data (use a dispersion measure for scaling, For pareto square root is used).    
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#--- 1) Prepare files
+#Open table
+# Look at this paper, it is nice.
+ #https://www.intechopen.com/chapters/52527
+
+#Sugars
+Met <- read.table(file="230530_Guillaume_Chambers_TCA.txt",sep="\t",dec = ".",header=TRUE)
+Met
+
+#AA
+MetAA <- read.table(file="230530_Guillaume_Chambers_AA.txt",sep="\t",dec = ".",header=TRUE)
+MetAA
+
+#TIC normalization
+
+Met$Mean_TIC <- rowSums(Met[, 8:19], na.rm = TRUE)
+MetAA$Mean_TIC <- rowSums(MetAA[, 8:28], na.rm = TRUE)
+#Obtain the TIC values for each sample: The TIC represents the sum of the ion intensities detected in a mass spectrometry experiment for a given sample. These values can be obtained from the mass spectrometry data file or by summing the ion intensities across all mass channels.
+
+Met$TOTAL_TIC <- mean(Met$Mean_TIC, na.rm = TRUE)
+MetAA$TOTAL_TIC <- mean(MetAA$Mean_TIC, na.rm = TRUE)
+# Calculate the mean TIC: Compute the average TIC value across all samples. This will serve as a reference point for normalization.
+
+Met$CORRECTION2 <- Met$TOTAL_TIC/Met$Mean_TIC
+MetAA$CORRECTION2 <- MetAA$TOTAL_TIC/MetAA$Mean_TIC
+#Calculate the TIC correction factor for each sample: Divide the mean TIC value by the TIC value of each sample to obtain the TIC correction factor. This factor represents the scaling factor required to adjust the TIC values of individual samples to match the mean TIC.
+
+#Apply the factor
+# Specify the target column and the columns to multiply
+target_column <- "CORRECTION2"
+columns_to_multiply <- c(8:19)
+
+target_columnAA <- "CORRECTION2"
+columns_to_multiplyAA <- c(8:28)
+
+# Perform the multiplication
+Met_TIC <-  Met[, columns_to_multiply] * Met[[target_column]]
+MetAA_TIC <-  MetAA[, columns_to_multiplyAA] * MetAA[[target_columnAA]]
+
+#Translate the table
+keep <- colnames(Met)[8:19]
+keepAA <- colnames(MetAA)[8:28]
+
+Met_f <- tidyr::gather(Met, key =  Metabolites, value = PEAK_AREA, keep)
+MetAA_f <- tidyr::gather(MetAA, key =  Metabolites, value = PEAK_AREA, keepAA)
+
+#Add TIC value
+Met_f$PEAK_AREA_TIC <-  Met_f$PEAK_AREA*Met_f$CORRECTION2
+MetAA_f$PEAK_AREA_TIC <-  MetAA_f$PEAK_AREA*MetAA_f$CORRECTION2
+``` 
+
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#--- 2) Normalization
+
+#----- a) TIC, Log
+
+#* 1- TIC normalization (to remove technical variation due to the period of acquisition of the scans, normalisation between samples)
+#* 2- Log transformation (correct for heteroscedasticity, to convert multiplicative relations into additive relations, and to make skewed distributions (more) symmetric )
+#* 3- Scaling and Centering of the data (use a dispersion measure for scaling, For pareto square root is used)
+
+
+#ref : https://bmcgenomics.biomedcentral.com/articles/10.1186/1471-2164-7-142
+
+
+#Log transformation
+Met_f$PEAK_AREA_TIC_Log <- log10(Met_f$PEAK_AREA_TIC)
+Met_f$PEAK_AREA_TIC_Log[Met_f$PEAK_AREA_TIC_Log == '-Inf'] <- 0
+
+MetAA_f$PEAK_AREA_TIC_Log <- log10(MetAA_f$PEAK_AREA_TIC)
+MetAA_f$PEAK_AREA_TIC_Log[MetAA_f$PEAK_AREA_TIC_Log == '-Inf'] <- 0
+
+Met_f$PEAK_AREA_Log <- log10(Met_f$PEAK_AREA)
+Met_f$PEAK_AREA_Log[Met_f$PEAK_AREA_Log == '-Inf'] <- 0
+
+MetAA_f$PEAK_AREA_Log <- log10(MetAA_f$PEAK_AREA)
+MetAA_f$PEAK_AREA_Log[MetAA_f$PEAK_AREA_Log == '-Inf'] <- 0
+
+#Extract Log transformed data without scaling and centering
+write.csv(Met_f, "Met_TCA.csv")
+write.csv(MetAA_f, "MetAA.csv")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+
+#----- b) Pareto scaling 
+
+#(Reduce the relative importance of large values, but keep data structure partially intact), Centering : focus on the differences and not the similarities in the data (does not have to be heterocedastic, log transofmred before processing)
+
+#Open files
+Met_TCA <- read.csv("Met_TCA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+Met_AA <- read.csv("MetAA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+#Parato Scaling on non-TIC Log_trasnformed data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(MS_SAMPLE_ID2, Metabolites, PEAK_AREA_Log))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA_Log)
+
+Met_AA_pareto <- subset(Met_AA, select = c(MS_SAMPLE_ID2, Metabolites, PEAK_AREA_Log))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA_Log)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_TCA_pareto[is.na(Met_TCA_pareto)] <- 0 
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:13],
+             centering = TRUE))
+Met_TCA_paretof$MS_SAMPLE_ID2 <- Met_TCA_pareto$MS_SAMPLE_ID2
+
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:22],
+             centering = TRUE))
+Met_AA_paretof$MS_SAMPLE_ID2 <- Met_AA_pareto$MS_SAMPLE_ID2
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:12]
+Met_TCA_Par_Log_Non_TIC <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = Log_Scaled, keep)
+
+keep <- colnames(Met_AA_paretof)[1:21]
+Met_AA_Par_Log_Non_TIC <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = Log_Scaled, keep)
+
+
+
+
+#Parato Scaling on TIC Log_trasnformed data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(MS_SAMPLE_ID2, Metabolites, PEAK_AREA_TIC_Log))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA_TIC_Log)
+
+
+Met_AA_pareto <- subset(Met_AA, select = c(MS_SAMPLE_ID2, Metabolites, PEAK_AREA_TIC_Log))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA_TIC_Log)
+
+
+library(IMIFA)
+
+#Change NA to 0
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:13],
+             centering = TRUE))
+Met_TCA_paretof$MS_SAMPLE_ID2 <- Met_TCA_pareto$MS_SAMPLE_ID2
+
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:22],
+             centering = TRUE))
+Met_AA_paretof$MS_SAMPLE_ID2 <- Met_AA_pareto$MS_SAMPLE_ID2
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:12]
+Met_TCA_Par_Log_TIC <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = TIC_Log_Scaled, keep)
+
+keep <- colnames(Met_AA_paretof)[1:21]
+Met_AA_Par_Log_TIC <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = TIC_Log_Scaled, keep)
+
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#--- 3) Merge Data
+
+#Open files
+Met_TCA <- read.csv("Met_TCA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+Met_AA <- read.csv("MetAA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+unique(Met_TCA$MS_SAMPLE_ID2)
+unique(Met_TCA_Par_Log_TIC$MS_SAMPLE_ID2)
+
+#Create column to merge
+Met_TCA_Par_Log_TIC$MS_SAMPLE_ID3 <- paste(Met_TCA_Par_Log_TIC$MS_SAMPLE_ID2, Met_TCA_Par_Log_TIC$Metabolites)
+
+Met_TCA_Par_Log_Non_TIC$MS_SAMPLE_ID3 <- paste(Met_TCA_Par_Log_Non_TIC$MS_SAMPLE_ID2, Met_TCA_Par_Log_Non_TIC$Metabolites)
+
+Met_TCA$MS_SAMPLE_ID3 <- paste(Met_TCA$MS_SAMPLE_ID2, Met_TCA$Metabolites)
+
+
+Met_AA_Par_Log_TIC$MS_SAMPLE_ID3 <- paste(Met_AA_Par_Log_TIC$MS_SAMPLE_ID2, Met_AA_Par_Log_TIC$Metabolites)
+
+Met_AA_Par_Log_Non_TIC$MS_SAMPLE_ID3 <- paste(Met_AA_Par_Log_Non_TIC$MS_SAMPLE_ID2, Met_AA_Par_Log_Non_TIC$Metabolites)
+
+Met_AA$MS_SAMPLE_ID3 <- paste(Met_AA$MS_SAMPLE_ID2, Met_AA$Metabolites)
+
+
+#Combine
+Met_f <- merge(Met_TCA,Met_TCA_Par_Log_TIC, by = c("MS_SAMPLE_ID3" ))
+Met_f2 <- merge(Met_f,Met_TCA_Par_Log_Non_TIC, by = c("MS_SAMPLE_ID3" ))
+Met_f2$Class <- c("TCA Glycolysis")
+
+Met_fAA <- merge(Met_AA,Met_AA_Par_Log_TIC, by = c("MS_SAMPLE_ID3" ))
+Met_f2AA <- merge(Met_fAA,Met_AA_Par_Log_Non_TIC, by = c("MS_SAMPLE_ID3" ))
+Met_f2AA$Class <- c("Amino Acids")
+
+#Finalize table
+Met_ff <- rbind(Met_f2, Met_f2AA)
+Met_ff$Sample_ID_F <- paste(Met_ff$Sample, Met_ff$Microbes, Met_ff$Culture, Met_ff$Media, Met_ff$Strain, sep = "_")
+
+#Extract Log transformed data with scaling and centering
+write.csv(Met_ff, "df_Met.csv")
+```
+
+
+The post-preprocessing result comprises a singular table featuring eight distinct columns, each housing diverse values :        
+
+* PEAK_AREA.  
+* PEARK_AREA_TIC.  
+* PEAK_AREA_Log. 
+* PEARK_AREA_TIC_Log. 
+* PEAK_AREA_Scaled. 
+* PEARK_AREA_TIC_Scaled. 
+* PEAK_AREA_Log_Scaled. 
+* PEARK_AREA_TIC_Log_Scaled. 
+
+
+## II]  Data analysis
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#ACP (http://www.sthda.com/french/articles/38-methodes-des-composantes-principales-dans-r-guide-pratique/73-acp-analyse-en-composantes-principales-avec-r-l-essentiel/)
+
+#Set up theme
+library(ggplot2)
+theme_set(theme_bw())
+
+#Open file
+Met_Final <- read.csv("df_Met.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+Met_Final <- subset(Met_Final, Media %in% c("SA"))
+#Add taxonomy
+taxo <- read.csv("MiniSC_taxo.csv", header=TRUE, sep = ",",  dec=".")
+Met_Final <- merge(Met_Final,taxo, by = c("Strain"))
+
+#Paste new SampleID column
+Met_Final$Sample_ID_F2 <- paste(Met_Final$Sample_ID_F, "_", Met_Final$Species)
+
+#Only single strains
+Met_Final <- subset(Met_Final, Culture %in% c("Single", "Control"))
+
+```
+
+### i) Permanova on all metabolites 
+
+**PERMANOVA Tot**.  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="show"}
+
+#PERMANOVA
+library(vegan)
+Working_file_tot <- Met_Final
+
+# Concatenate rows of interest
+Working_file_tot$SAMPLE_ID_G <- paste(Working_file_tot$Sample, Working_file_tot$Strain, Working_file_tot$Media, sep = "_")
+
+library(dplyr)
+Working_file_tot <- Working_file_tot %>% select(c("SAMPLE_ID_G","PEAK_AREA_TIC_Log","Metabolites"))
+
+
+# Remove duplicated columns
+data <- tidyr::spread(Working_file_tot, Metabolites, PEAK_AREA_TIC_Log)
+data[data == '-Inf'] <- 0
+data <- na.omit(data)   
+
+
+
+env <- data
+
+library(stringr)
+env[c("Numero_sample","Strain", "Media")] <- str_split_fixed(env$SAMPLE_ID_G, '_', 3)
+
+
+env2 <- env[35:37]
+
+row.names(data) <- data$SAMPLE_ID_G
+data$SAMPLE_ID_G <- NULL
+
+library(vegan)
+data.dist <- vegdist(data, method="canberra")
+
+# default data by terms
+
+#data.div <- adonis2(data ~ BIO_rep*TREATMENT_1*Time_point*ORGANISM, data = env2, permutations = 999, method="canberra")
+
+#Overall
+data.div.TCA <- adonis2(data ~ Strain, data = env2, permutations = 999, method="canberra")
+data.div.TCA
+
+# Extract R-squared value and p-value
+summary_data <- data.frame(summary(data.div.TCA))
+
+# R-squared value
+R_squared <- data.div.TCA$R2[1]
+# p-value
+p.value <- data.div.TCA$`Pr(>F)`[1]
+
+```
+
+
+### ii) PcoA targeted metabolites    
+
+**PcoA all metabolites**.  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#http://www.sthda.com/french/articles/38-methodes-des-composantes-principales-dans-r-guide-pratique/73-acp-analyse-en-composantes-principales-avec-r-l-essentiel/ 
+library(dplyr)
+
+#Remove Pool
+Met_Final2 <- subset(Met_Final, Culture %in% c("Single", "Control" ))
+Met_Final2 <- subset(Met_Final2, !Microbes %in% c("MediaC" ))
+Met_Final2 <- subset(Met_Final2, !Species %in% c("Bacteria", "Fungi" ))
+
+unique(Met_Final2$Species)
+#Working_file <- subset(Met_Final, !Class %in% c("Amino Acids"))
+Working_file <- Met_Final2
+
+Met_Final_filtered <- Working_file %>% select(c("Sample_ID_F2","Metabolites", "PEAK_AREA_Log")) #Change second criteria according to what you want analyse.
+
+Met_Final_filtered[is.na(Met_Final_filtered)] <- 0
+
+Met_Final_filtered_Spr <- tidyr::spread(Met_Final_filtered, key = Metabolites, value = PEAK_AREA_Log)
+
+Met_Final_filtered_Spr[is.na(Met_Final_filtered_Spr)] <- 0
+Met_Final_filtered_Spr[Met_Final_filtered_Spr == '-Inf'] <- 0
+
+#Met_Final_filtered_Spr <- na.omit(Met_Final_filtered_Spr) 
+row.names(Met_Final_filtered_Spr) <- Met_Final_filtered_Spr$Sample_ID_F2
+Met_Final_filtered_Spr$Sample_ID_F2 <- NULL
+library("FactoMineR")
+library("factoextra")
+
+#Create plot
+res.pca <- PCA(Met_Final_filtered_Spr, graph = FALSE)
+print(res.pca)
+
+#Extract everything you need
+#Check percent of variation
+plot_percent <- fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 100))
+plot_percent
+
+#Variable contributions
+
+variable_contributions <- facto_summarize(res.pca, element = "var", result = c("coord", 
+        "contrib", "cos2"))
+
+ #Prepare scaling
+    pca.ind <- get_pca_ind(res.pca)
+    pca.var <- get_pca_var(res.pca)
+    ind <- data.frame(pca.ind$coord, stringsAsFactors = TRUE)
+    var <- data.frame(pca.var$coord, stringsAsFactors = TRUE)
+    
+    r <- min((max(ind[, "Dim.1"]) - min(ind[, "Dim.1"])/(max(var[, "Dim.1"]) - 
+        min(var[, "Dim.1"]))), (max(ind[, "Dim.2"]) - min(ind[, "Dim.2"])/(max(var[, 
+        "Dim.2"]) - min(var[, "Dim.2"])))) 
+ #This is to scaled your PcoA. You then just multiply by your Dim1 and Dim2 in you geom_segment
+    
+#Dimensions
+Dim1 <- capture.output(cat(round(res.pca$eig[1,2], digits = 2), "%"))
+Dim2 <- capture.output(cat(round(res.pca$eig[2,2], digits = 2), "%"))
+
+#Create data.frame
+library(data.table)
+library(dplyr)
+library(stringr)
+
+data_plotting2 <- data.frame(res.pca$ind$coord) %>% mutate(SP1 = row.names(.)) %>%
+  mutate(Sample = str_split_fixed(SP1, '_', 6)[, 1],
+         Microbes = str_split_fixed(SP1, '_', 6)[, 2],
+         Culture = str_split_fixed(SP1, '_', 6)[, 3],
+         Media = str_split_fixed(SP1, '_', 6)[, 4],
+         Strain = str_split_fixed(SP1, '_', 6)[, 5],
+         Species = str_split_fixed(SP1, '_', 6)[, 6])
+data_plotting2
+
+
+#Calculate mean
+points_pcoa = data.frame(data_plotting2 %>% 
+                group_by(Species) %>% 
+                mutate(meanX=mean(Dim.1), meanY=mean(Dim.2)))
+unique(points_pcoa$Species)
+#Plot
+
+data_plotting2$Species <- factor(data_plotting2$Species, 
+ levels = c(" Streptomyces R431", " Bacillus R147", " Agrobacterium R651", " Mesorhizobium R695", " Flavobacterium R420", " Pseudomonas R09", " Pseudomonas R329", " Achromobacter R565", " Burkholderia R16D2", " Variovorax R318D1" ," Acidovorax R568", " Plectosphaerella R16"," Fusarium R212"," Dendryphion R243"," Dactylonectria R147", " Media"))
+
+
+
+points_pcoa$Species <- factor(points_pcoa$Species, 
+ levels =  c(" Streptomyces R431", " Bacillus R147", " Agrobacterium R651", " Mesorhizobium R695", " Flavobacterium R420", " Pseudomonas R09", " Pseudomonas R329", " Achromobacter R565", " Burkholderia R16D2", " Variovorax R318D1"," Acidovorax R568", " PlectosphaerellaR16"," Fusarium R212","Dendryphion R243"," Dactylonectria R147", " Media"))
+
+# Replace 'B' with 'Bacteria' and 'F' with 'Fungi' in column B
+data_plotting2$Microbes <- ifelse(data_plotting2$Microbes == 'B', 'Bacteria', 
+                           ifelse(data_plotting2$Microbes == 'F', 'Fungi', data_plotting2$Microbes))
+
+
+
+#Plot without arrows
+library(ggrepel)
+Plot2tag <- ggplot() + 
+  geom_point(data=data_plotting2, aes(x=Dim.1,y=Dim.2,color = Species), alpha =0.8, size = 1) + 
+geom_point(data = points_pcoa, mapping = aes(x=meanX, y=meanY, xend=Dim.1, yend=Dim.2, color=Species), size = 4) + 
+    ggtitle("Targeted metabolic profiles (n=41)") +
+  xlab(paste("PCoA1",Dim1)) + ylab(paste("PCoA2", Dim2)) +
+    #facet_grid(~Time_point, space="free") +
+   theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"), strip.text.x = element_text(size = 12, color = "white"), strip.text.y = element_text(size = 12, color = "white")) +
+  geom_segment(data = points_pcoa, mapping = aes(x=meanX, y=meanY, xend=Dim.1, yend=Dim.2, color=Species), size = 0.5, alpha=1)+
+        scale_color_manual('Strains', values=Palette_Species)+
+    scale_fill_manual('Strains', values=Palette_Species)+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#585858") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#585858") +
+  #stat_ellipse(data = data_plotting2, aes(x = Dim.1, y = Dim.2, color = Microbes, alpha = 0.6))+
+  xlim(-7,7) +ylim(-6,6 ) +
+       geom_text(aes(x = 4, y =6, label = paste(round(R_squared*100, digits = 3), "% of variance; p =", format(p.value, digits = 2))), color = "black", size = 3.5) +
+    guides(color = guide_legend(ncol = 2)) +
+theme(legend.position = "none")
+
+Plot2tag
+```
+#jzebvojzebvojzebnvozebnvozevbnozjvnbzeovnzeokvnbzeovnbzejkvn zeklvnel
+
+
+
+
+
+
+# B] Untargeted Metabolomics
+
+
+## I]  Data analysis
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Set up theme
+library(ggplot2)
+theme_set(theme_bw())
+
+#Open file
+Met_untarg <- read.csv("df_Untargeted.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+# Assuming your data frame is named 'df' and the word you're looking for is 'YourWord'
+word_to_keep <- 'area'
+
+# Use grep to find the column indices containing the specified word
+columns_to_keep <- grep(word_to_keep, names(Met_untarg), value = TRUE)
+
+# Subset the dataframe to keep only the columns with the specified word
+df_filtered <- Met_untarg[, columns_to_keep]
+
+# Print or use df_filtered as needed
+print(df_filtered)
+
+
+#Remove useless words in colnames 
+
+# Specify the words you want to remove
+words_to_remove <- c("datafile.", ".mzML.area")
+
+#New Colnames
+library(stringr)
+new_colnames <- str_remove_all(colnames(df_filtered), paste(words_to_remove, collapse = "|"))
+colnames(df_filtered) <- new_colnames
+
+# Use the transpose function t() to switch columns and rows
+df_transposed <- t(df_filtered)
+
+# Convert the result back to a dataframe if needed
+df_transposed <- as.data.frame(df_transposed)
+
+
+#PRepare table normalized
+#Calculaute rowSums
+df_transposed_norm <- df_transposed
+df_transposed_norm$sum <- rowSums(df_transposed_norm,na.rm = TRUE)
+
+
+#Calculaute rowSums
+df_transposed_norm$sum <- rowSums(df_transposed_norm,na.rm = TRUE)
+
+# Choose the column to use as the divisor
+divisor_column <- "sum"
+
+
+df_transposed_norm2 <- df_transposed_norm
+# Divide each value in a row by the corresponding value in the divisor column
+df_transposed_norm2 <- df_transposed_norm2 / df_transposed_norm2[, divisor_column]
+
+df_transposed_norm2$sum <- NULL
+
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="show"}
+
+#http://www.sthda.com/french/articles/38-methodes-des-composantes-principales-dans-r-guide-pratique/73-acp-analyse-en-composantes-principales-avec-r-l-essentiel/ 
+
+library(dplyr)
+#Change to df_transposed_norm2 or df_transposed
+
+df_transposed <- df_transposed_norm2
+#remove Media and SA_Media_C
+df_transposed <- df_transposed[!(rownames(df_transposed) %in% c("area", "24_Media_SA_Media", "98_Media_C_SA_Media_C", "99_Media_C_SA_Media_C", "97_Media_C_SA_Media_C", "100_Media_C_SA_Media_C", "101_Media_C_SA_Media_C", "102_Media_C_SA_Media_C", "103_Media_C_SA_Media_C", "104_Media_C_SA_Media_C")), ]
+
+
+#Remove NA
+df_transposed[is.na(df_transposed)] <- 0
+```
+
+### i) Permanova on all metabolites 
+
+**PERMANOVA Tot**.  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="show"}
+
+#PERMANOVA
+
+#Prepare data
+#Prepare dataset
+data <- df_transposed
+df_transposed3 <- df_transposed
+#Prepare environement
+library(stringr)
+df_transposed3$SAMPLE_ID_G <- row.names(df_transposed3)
+df_transposed3[c("Numero_sample","Kingdom", "Media", "Strain")] <- str_split_fixed(df_transposed3$SAMPLE_ID_G, '_', 4)
+env2 <- df_transposed3[6309:6312]
+ 
+
+#Matrix distances
+str(data)
+library(vegan)
+data.dist <- vegdist(data, method="canberra")
+
+#Overall
+data.div.TCA <- adonis2(data ~ Strain, data = env2, permutations = 999, method="canberra")
+data.div.TCA
+
+# Extract R-squared value and p-value
+summary_data <- data.frame(summary(data.div.TCA))
+
+# R-squared value
+R_squared_unt <- data.div.TCA$R2[1]
+# p-value
+p_value_unt <- data.div.TCA$`Pr(>F)`[1]
+
+```
+
+### ii) PcoA targeted metabolites    
+
+
+**PcoA TCA Glycolysis**.  
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+
+#Start PcoA
+library("FactoMineR")
+library("factoextra")
+
+
+res.pca <- PCA(df_transposed, graph = FALSE)
+fviz_pca_biplot(res.pca,
+                col.var = "#2E9FDF", # Variables color
+                col.ind = "#696969"  # Individuals color
+                )
+
+#Check percent of variation
+plot_percent <- fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 100))
+plot_percent
+
+Dim1 <- capture.output(cat(round(res.pca$eig[1,2], digits = 2), "%"))
+Dim2 <- capture.output(cat(round(res.pca$eig[2,2], digits = 2), "%"))
+
+res.pca$eig
+res.pca$svd
+
+library(data.table)
+data_plotting <- data.frame(res.pca$ind$coord)
+data_plotting$SP1 <- row.names(data_plotting)
+
+plot(res.pca)
+#Concatenate metadata
+
+library(stringr)
+data_plotting2 <- data_plotting
+
+data_plotting2[c("Sample","Microbes", "Media","Strain")] <- str_split_fixed(row.names(data_plotting2), '_', 4)
+
+#Add taxonomy
+
+Taxo <- read.csv("MiniSC_taxo.csv", header=TRUE, sep = ",",  dec=".")
+unique(Taxo$Species)
+data_plotting2 <- merge(data_plotting2,Taxo, by = c("Strain"))
+unique(data_plotting2$Species)
+
+#Add Mean TREATMENT per TIMEPOINT
+
+#library(dplyr)
+Dim.1 <- tapply(data_plotting2$Dim.1,data_plotting2$Strain,mean)
+Dim.2 <- tapply(data_plotting2$Dim.2,data_plotting2$Strain,mean)
+F1 <- data.frame(cbind(Dim.1,Dim.2))
+
+F1$Microbes <- c("")
+F1$Media <- c("")
+
+#Plot
+
+#Calculate mean
+points_pcoa = data.frame(data_plotting2 %>% 
+                group_by(Strain) %>% 
+                mutate(meanX=mean(Dim.1), meanY=mean(Dim.2)))
+
+
+
+#Plot
+
+
+data_plotting2$Species <- factor(data_plotting2$Species, 
+ levels = c("Streptomyces R431", "Bacillus R147", "Agrobacterium R651", "Mesorhizobium R695", "Flavobacterium R420", "Pseudomonas R09", "Pseudomonas R329", "Achromobacter R565", "Burkholderia R16D2", "Variovorax R318D1","Acidovorax R568", "Plectosphaerella R16","Fusarium R212","Dendryphion R243","Dactylonectria R147", "Media"))
+
+points_pcoa$Species <- factor(points_pcoa$Species, 
+ levels = c("Streptomyces R431", "Bacillus R147", "Agrobacterium R651", "Mesorhizobium R695", "Flavobacterium R420", "Pseudomonas R09", "Pseudomonas R329", "Achromobacter R565", "Burkholderia R16D2", "Variovorax R318D1","Acidovorax R568", "Plectosphaerella R16","Fusarium R212","Dendryphion R243","Dactylonectria R147", "Media"))
+
+
+
+
+
+# Replace 'B' with 'Bacteria' and 'F' with 'Fungi' in column B
+data_plotting2$Microbes <- ifelse(data_plotting2$Microbes == 'B', 'Bacteria', 
+                           ifelse(data_plotting2$Microbes == 'F', 'Fungi', data_plotting2$Microbes))
+
+#Plot final 
+
+
+Plotunt <- ggplot() + 
+  geom_jitter(data=data_plotting2, aes(x=Dim.1,y=Dim.2, color = Species), alpha =0.5, size = 1) + 
+  geom_point(data = points_pcoa, mapping = aes(x=meanX, y=meanY, xend=Dim.1, yend=Dim.2, color=Species), size = 4) + 
+    ggtitle("Untargeted profiles (6307 features)") + 
+  xlab(paste("PCoA1",Dim1)) + ylab(paste("PCoA2", Dim2)) +
+    #facet_grid(~Time_point, space="free") +
+   theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"), strip.text.x = element_text(size = 12, color = "white"), strip.text.y = element_text(size = 12, color = "white")) +
+    geom_hline(yintercept = 0, linetype = "dashed", color = "#585858") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#585858") +
+  geom_segment(data = points_pcoa, mapping = aes(x=meanX, y=meanY, xend=Dim.1, yend=Dim.2, color=Species), size = 0.5, alpha=0.5) +
+   scale_color_manual('Strain', values=Palette_Species.x)+
+   scale_fill_manual('Strain', values=Palette_Species.x) + 
+  geom_text(aes(x = 60, y = 62, label = paste(round(R_squared_unt*100, digits = 3), "% of variance; p =", format(p_value_unt, digits = 2))), color = "black", size = 3.5)# +
+#theme(legend.position = "none")
+Plotunt
+
+Plotunt
+```
+
+*****
+
+# End of script
+      
+Author : Guillaume Chesneau     
+[Twitter](https://twitter.com/Chesneau_G).   
+[Researchgate](https://www.researchgate.net/profile/Guillaume-Chesneau-3).   
+[Google Scholar](https://scholar.google.fr/citations?user=ywzDf3QAAAAJ&hl=fr&oi=ao). 
+
+MPIPZ Cologne,  [Hacquard's group](https://www.mpipz.mpg.de/hacquard).   
+
+*****
