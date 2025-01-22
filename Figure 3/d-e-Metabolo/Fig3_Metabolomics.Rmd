@@ -1,0 +1,1040 @@
+---
+title: "MetaFlowTrain: a highly-parallelized and modular fluidic system to study exometabolite-mediated inter-organismal communication"
+author: "Chesneau et al., 2025, Guillaume Chesneau"
+date: "06/09/2024"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, autodep = TRUE, warning = FALSE)
+#Set working direction
+knitr::opts_knit$set(root.dir = "") 
+```
+
+This script has been made on R 4.2.2 (and Rstudio 2022.12.0+353)
+```{r R version}
+R.version
+#Load theme set
+library(ggplot2)
+theme_set(theme_bw())
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Palette color
+
+#Prepare palette color for conditions
+
+  name_ORDGANISM <- c("Media.Bacteria", "Media.Fungi", "Bacteria.Fungi", "Fungi.Bacteria", "Media.BacteriaFungi", "Media.Media")
+  
+  # desired color palette
+  Palette_ORGANISM <- c("#ff3300", "#00cc44", "#ffd9b3", "#b35900", "#4d0026","#cccccc")
+  
+  # associated EnvType level
+  names(Palette_ORGANISM) <- name_ORDGANISM
+  
+  
+#Prepare palette color for conditions 2
+
+  name_ORDGANISM2 <- c("Bacteria", "Fungi", "Bacteria_Fungi", "Fungi_Bacteria", "Bacteria_Fungi_Media", "Media_Media")
+  
+  # desired color palette
+  Palette_ORGANISM2 <- c("#ff3300", "#00cc44", "#ffd9b3", "#b35900", "#4d0026","#cccccc")
+  
+  # associated EnvType level
+  names(Palette_ORGANISM2) <- name_ORDGANISM2
+  
+  
+  #Prepare palette color for conditions 2
+
+  name_ORDGANISM3 <- c("Bacteria-Media", "Fungi-Media", "Bacteria-Fungi", "Fungi-Bacteria", "Bacteria+Fungi-Media", "Media-Media")
+  
+  # desired color palette
+  Palette_ORGANISM3 <- c("#ff3300", "#00cc44", "#ffd9b3", "#b35900", "#4d0026","#cccccc")
+  
+  # associated EnvType level
+  names(Palette_ORGANISM3) <- name_ORDGANISM3
+  
+  #Prepare palette color for TREATMENT_1
+  name_TREATMENT_1 <- c("Peat", "Peat.A", "Peat.A.B", "Peat.A.BF")
+  
+  # desired color palette
+  Palette_TREATMENT_1 <- c("#ff3300", "#00cc44", "#ffd9b3", "#b35900")
+  
+  # associated EnvType level
+  names(Palette_TREATMENT_1) <- name_TREATMENT_1
+  
+str(Palette_TREATMENT_1)
+
+
+  #Prepare palette color for TREATMENT_1
+  name_TREATMENT_2 <- c("Peat", "Peat-Plant", "Peat-Plant-B", "Peat-Plant-B-F")
+  # desired color palette
+  Palette_TREATMENT_2 <- c("#a07437", "#849146", "#d13505", "#2caaaa")
+  
+  # associated EnvType level
+  names(Palette_TREATMENT_2) <- name_TREATMENT_2
+```
+
+
+*****
+
+# 1 -  Preprocessing of data
+
+Input data are raw peak area table with samples in rows and metabolites in columns.
+Data are preprocessed individually for each run and scaled in order to be compared between runs.
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#- a) Amino acids
+
+#---(i) Prepare files
+
+#Open table
+# This input file is a full table with all data from the study
+ #https://www.intechopen.com/chapters/52527
+
+#AA
+Met <- read.table(file="Raw_AA.txt",sep="\t",dec = ".",header=TRUE)
+Met
+``` 
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#---(ii) Process filtering-normalization
+#Data are already TIC normalized
+
+library(tidyr)
+library(dplyr)
+
+met_TIC <- Met #Change with any subset files to process
+
+#Remove outliers defined by a loading difference of greater than 90% (70% in the paper) compared to the average of the total abundance sums in the run ((https://link.springer.com/article/10.1007/s11306-019-1564-8#Sec2))
+# If TIC is greater then 90% I removed
+
+met_TIC$Filtered<-ifelse(met_TIC$CORRECTION2 > 1.95,"OUT",
+                         ifelse(met_TIC$CORRECTION2 < 0.05,"OUT", "IN"))
+
+#Check number of samples removes
+table(met_TIC$Filtered) #Loose 70 samples (19.49% of samples)
+
+
+#calculate CV (Coefficient of Variation), allow to know metabolites that are too variable. Not really robust. NOT DO
+keep <- colnames(met_TIC)[18:37]
+Met_AA <- tidyr::gather(met_TIC, key =  Metabolites, value = PEAK_AREA_TIC, keep)
+Met_AA$Class = c("Amino_Acids")
+Met_AA
+Met_AA$PEAK_AREA_TIC <- as.numeric(Met_AA$PEAK_AREA_TIC)
+
+Met_AAf <- Met_AA
+
+
+#combine year and month into one column
+Met_AAf$all_bio_cat_factor
+Met_AAf2 <- aggregate(PEAK_AREA_TIC ~ ORGANISM2 + Metabolites, data = Met_AAf, FUN = sum)
+Met_AAf3 <- aggregate(PEAK_AREA_TIC ~ ORGANISM2 + Metabolites, data = Met_AAf, FUN = sd)
+colnames(Met_AAf3) <- c("A", "B", "sd")
+
+Met_AAf2$Sd <- c(Met_AAf3$sd)
+
+Met_AAf2$CV <-  Met_AAf2$Sd / Met_AAf2$PEAK_AREA_TIC * 100
+
+#INterpreation of CV
+#A CV of 0.5 means the standard deviation is half as large as the mean.
+#A CV of 1 means the standard deviation is equal to the mean.
+#A CV of 1.5 means the standard deviation is 1.5 times larger than the mean.
+
+#Plot CVs
+
+Met_AAf2$col <- c("unique")
+Met_AAf2[is.na(Met_AAf2)] <- 0
+
+library(ggplot2)
+Plot_CV <- ggplot(data=Met_AAf2, 
+                             aes_string(x='CV',y='col')) + 
+  geom_boxplot(outlier.shape = TRUE) + 
+  geom_jitter(alpha=0.5) +
+  ylab ("Samples") + xlab ("CVs") +
+  ggtitle("distributions of CVs") + 
+  geom_vline(data = Met_AAf2, aes(xintercept = as.numeric(40)))
+
+
+#REmove samples when to high CV. Should be 25% according to https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6570933/.
+
+Remove <- Met_AAf2[which(Met_AAf2$CV >40),]
+Remove <- Remove$all_bio_cat_factor
+#This metabolites concentration in each samples are outliers, but they will be saw in plots. Can continued normalization with file called Met_AA
+
+
+
+#___(iii) Normalized data
+
+#1- TIC normalization (to remove technical variation due to the period of acquisition of the scans, normalisation between samples)
+#2- Log transformation (correct for heteroscedasticity, to convert multiplicative relations into additive relations, and to make skewed distributions (more) symmetric )
+#3- Scaling and Centering of the data (use a dispersion measure for scaling, For pareto square root is used)
+
+#ref : https://bmcgenomics.biomedcentral.com/articles/10.1186/1471-2164-7-142
+
+
+#The noise-filtered data of individual samples were  normalized by the total intensity of all metabolites via TIC we can also calculate the non TIC data
+#raw value non TIC normalized
+
+Met_AA$CORRECTION2 <- as.numeric(Met_AA$CORRECTION2)
+Met_AA$PEAK_AREA <- Met_AA$PEAK_AREA_TIC * Met_AA$CORRECTION2
+
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6616221/ TO be continued
+
+
+#Log transformation
+Met_AA$PEAK_AREA_TIC_Log <- log10(Met_AA$PEAK_AREA_TIC)
+Met_AA$PEAK_AREA_TIC_Log[Met_AA$PEAK_AREA_TIC_Log == '-Inf'] <- 0
+
+Met_AA$PEAK_AREA_Log <- log10(Met_AA$PEAK_AREA)
+Met_AA$PEAK_AREA_Log[Met_AA$PEAK_AREA_Log == '-Inf'] <- 0
+
+
+#Extract Log transformed data without scaling and centering
+#write.csv(Met_AA, "Final/Met_AA.csv")
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#- b) TCA - Glycolysis 
+
+#---(i) Prepare files
+#Open table
+# This input file is a full table with all data from the study
+ #https://www.intechopen.com/chapters/52527
+
+#AA
+Met <- read.table(file="Raw_TCA.txt",sep="\t",dec = ".",header=TRUE)
+Met
+```
+
+
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+
+#---(ii) Process filtering-normalization
+
+#___(ii) Filter data
+#Data are already TIC normalized
+
+library(tidyr)
+library(dplyr)
+
+met_TIC <- Met #Change with any subset files to process
+
+#Remove outliers defined by a loading difference of greater than 90% (70% in the paper) compared to the average of the total abundance sums in the run ((https://link.springer.com/article/10.1007/s11306-019-1564-8#Sec2))
+# If TIC is greater then 90% I removed
+
+met_TIC$Filtered<-ifelse(met_TIC$CORRECTION2 > 1.95,"OUT",
+                         ifelse(met_TIC$CORRECTION2 < 0.05,"OUT", "IN"))
+
+#Check number of samples removes
+table(met_TIC$Filtered) #Loose 43 samples (11.62% of samples)
+
+
+#calculate CV (Coefficient of Variation), allow to know metabolites that are too variable. Not really robust. NOT DO
+keep <- colnames(met_TIC)[18:33]
+MET_TCA <- tidyr::gather(met_TIC, key =  Metabolites, value = PEAK_AREA_TIC, keep)
+MET_TCA$Class = c("TCA_Glycolysis")
+MET_TCA
+MET_TCA$PEAK_AREA_TIC <- as.numeric(MET_TCA$PEAK_AREA_TIC)
+
+MET_TCAf <- MET_TCA
+
+
+#combine year and month into one column
+MET_TCAf$all_bio_cat_factor
+MET_TCAf2 <- aggregate(PEAK_AREA_TIC ~ ORGANISM2 + Metabolites, data = MET_TCAf, FUN = sum)
+MET_TCAf3 <- aggregate(PEAK_AREA_TIC ~ ORGANISM2 + Metabolites, data = MET_TCAf, FUN = sd)
+colnames(MET_TCAf3) <- c("A", "B", "sd")
+
+MET_TCAf2$Sd <- c(MET_TCAf3$sd)
+
+MET_TCAf2$CV <-  MET_TCAf2$Sd / MET_TCAf2$PEAK_AREA_TIC * 100
+
+#INterpreation of CV
+#A CV of 0.5 means the standard deviation is half as large as the mean.
+#A CV of 1 means the standard deviation is equal to the mean.
+#A CV of 1.5 means the standard deviation is 1.5 times larger than the mean.
+
+#Plot CVs
+
+MET_TCAf2$col <- c("unique")
+MET_TCAf2[is.na(MET_TCAf2)] <- 0
+
+library(ggplot2)
+Plot_CV <- ggplot(data=MET_TCAf2, 
+                             aes_string(x='CV',y='col')) + 
+  geom_boxplot(outlier.shape = TRUE) + 
+  geom_jitter(alpha=0.5) +
+  ylab ("Samples") + xlab ("CVs") +
+  ggtitle("distributions of CVs") + 
+  geom_vline(data = MET_TCAf2, aes(xintercept = as.numeric(40)))
+
+
+mean(MET_TCAf2$CV)
+
+
+#REmove samples when to high CV. Should be 25% according to https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6570933/.
+
+Remove <- MET_TCAf2[which(MET_TCAf2$CV >40),]
+Remove <- Remove$all_bio_cat_factor
+#This metabolites concentration in each samples are outliers, but they will be saw in plots. Can continued normalization with file called MET_TCA
+
+
+
+#___(iii) Normalized data
+
+#1- TIC normalization (to remove technical variation due to the period of acquisition of the scans, normalisation between samples)
+#2- Log transformation (correct for heteroscedasticity, to convert multiplicative relations into additive relations, and to make skewed distributions (more) symmetric )
+#3- Scaling and Centering of the data (use a dispersion measure for scaling, For pareto square root is used)
+
+#ref : https://bmcgenomics.biomedcentral.com/articles/10.1186/1471-2164-7-142
+
+
+#The noise-filtered data of individual samples were  normalized by the total intensity of all metabolites via TIC we can also calculate the non TIC data
+#raw value non TIC normalized
+
+MET_TCA$CORRECTION2 <- as.numeric(MET_TCA$CORRECTION2)
+MET_TCA$PEAK_AREA <- MET_TCA$PEAK_AREA_TIC * MET_TCA$CORRECTION2
+
+#https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6616221/ TO be continued
+
+
+#Log transformation
+MET_TCA$PEAK_AREA_TIC_Log <- log10(MET_TCA$PEAK_AREA_TIC)
+MET_TCA$PEAK_AREA_TIC_Log[MET_TCA$PEAK_AREA_TIC_Log == '-Inf'] <- 0
+
+MET_TCA$PEAK_AREA_Log <- log10(MET_TCA$PEAK_AREA)
+MET_TCA$PEAK_AREA_Log[MET_TCA$PEAK_AREA_Log == '-Inf'] <- 0
+
+
+#Extract Log transformed data without scaling and centering
+#write.csv(MET_TCA, "Final/Met_TCA.csv")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#- c) Pareto scaling 
+
+#(Reduce the relative importance of large values, but keep data structure partially intact), Centering : focus on the differences and not the similarities in the data (does not have to be heterocedastic, log transofmred before processing)
+
+#---(i) AA
+#Open files
+Met_AA <- read.csv("Final/Met_AA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+#AA
+#Parato Scaling on TIC Log_trasnformed data
+
+Met_AA_pareto <- subset(Met_AA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_TIC_Log))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA_TIC_Log)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+#Pareto calculation
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:21],
+             centering = TRUE))
+Met_AA_paretof$BIO_SAMPLE_ID3 <- Met_AA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_AA_paretof)[1:20]
+Met_AA_Par_LogTIC <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = TIC_Log_Scaled, keep)
+
+
+
+#Parato Scaling on Non-TIC Log_trasnformed data
+
+Met_AA_pareto <- subset(Met_AA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_Log))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA_Log)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+#Pareto calculation
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:21],
+             centering = TRUE))
+Met_AA_paretof$BIO_SAMPLE_ID3 <- Met_AA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_AA_paretof)[1:20]
+Met_AA_Par_Log <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = Log_Scaled, keep)
+
+
+
+
+#Parato Scaling on TIC data
+
+Met_AA_pareto <- subset(Met_AA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_TIC))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA_TIC)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+#Pareto calculation
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:21],
+             centering = TRUE))
+Met_AA_paretof$BIO_SAMPLE_ID3 <- Met_AA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_AA_paretof)[1:20]
+Met_AA_Par_TIC <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = TIC_Scaled, keep)
+
+
+
+
+#Parato Scaling on non-TIC data
+
+Met_AA_pareto <- subset(Met_AA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA))
+Met_AA_pareto <- tidyr::spread(Met_AA_pareto, key =  Metabolites, value = PEAK_AREA)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_AA_pareto[is.na(Met_AA_pareto)] <- 0 
+
+#Pareto calculation
+Met_AA_paretof <- data.frame(pareto_scale(Met_AA_pareto[2:21],
+             centering = TRUE))
+Met_AA_paretof$BIO_SAMPLE_ID3 <- Met_AA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_AA_paretof)[1:20]
+Met_AA_Par <- tidyr::gather(Met_AA_paretof, key =  Metabolites, value = Scaled, keep)
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#---(ii) TCA Glycolysis
+
+#(Reduce the relative importance of large values, but keep data structure partially intact), Centering : focus on the differences and not the similarities in the data (does not have to be heterocedastic, log transofmred before processing)
+
+#Open files
+Met_TCA <- read.csv("Final/Met_TCA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+#TCA
+#Parato Scaling on TIC Log_trasnformed data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_TIC_Log))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA_TIC_Log)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_TCA_pareto[is.na(Met_TCA_pareto)] <- 0 
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:17],
+             centering = TRUE))
+Met_TCA_paretof$BIO_SAMPLE_ID3 <- Met_TCA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:16]
+Met_TCA_Par_LogTIC <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = TIC_Log_Scaled, keep)
+
+
+#Parato Scaling on Non-TIC Log_trasnformed data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_Log))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA_Log)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_TCA_pareto[is.na(Met_TCA_pareto)] <- 0 
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:17],
+             centering = TRUE))
+Met_TCA_paretof$BIO_SAMPLE_ID3 <- Met_TCA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:16]
+Met_TCA_Par_Log <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = Log_Scaled, keep)
+
+
+
+
+#Parato Scaling on TIC data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA_TIC))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA_TIC)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_TCA_pareto[is.na(Met_TCA_pareto)] <- 0 
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:17],
+             centering = TRUE))
+Met_TCA_paretof$BIO_SAMPLE_ID3 <- Met_TCA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:16]
+Met_TCA_Par_TIC <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = TIC_Scaled, keep)
+
+
+
+#Parato Scaling on non-TIC data
+
+Met_TCA_pareto <- subset(Met_TCA, select = c(BIO_SAMPLE_ID3, Metabolites, PEAK_AREA))
+Met_TCA_pareto <- tidyr::spread(Met_TCA_pareto, key =  Metabolites, value = PEAK_AREA)
+
+library(IMIFA)
+
+#Change NA to 0
+Met_TCA_pareto[is.na(Met_TCA_pareto)] <- 0 
+
+#Pareto calculation
+Met_TCA_paretof <- data.frame(pareto_scale(Met_TCA_pareto[2:17],
+             centering = TRUE))
+Met_TCA_paretof$BIO_SAMPLE_ID3 <- Met_TCA_pareto$BIO_SAMPLE_ID3
+
+#Final Table
+keep <- colnames(Met_TCA_paretof)[1:16]
+Met_TCA_Par <- tidyr::gather(Met_TCA_paretof, key =  Metabolites, value = Scaled, keep)
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#- d) Merge Data
+
+#---(i) AA
+
+#Open files
+Met_AA <- read.csv("Final/Met_AA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+Met_AA$BIO_SAMPLE_ID3_Met <- paste( Met_AA$BIO_SAMPLE_ID3, "/", Met_AA$Metabolites)
+
+Met_TCA <- read.csv("Final/Met_TCA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+colnames(Met_AA)
+colnames(Met_AA_Par_Log)
+colnames(Met_AA_Par_TIC)
+colnames(Met_AA_pareto)
+
+Met_AA_Par_LogTIC$BIO_SAMPLE_ID3_Met <- paste( Met_AA_Par_LogTIC$BIO_SAMPLE_ID3, "/", Met_AA_Par_LogTIC$Metabolites)
+Met_AA_Par_LogTIC$BIO_SAMPLE_ID3 <- NULL
+Met_AA_Par_LogTIC$Metabolites <- NULL
+Met_AA_Par_Log$BIO_SAMPLE_ID3_Met <- paste( Met_AA_Par_Log$BIO_SAMPLE_ID3, "/", Met_AA_Par_Log$Metabolites)
+Met_AA_Par_Log$BIO_SAMPLE_ID3 <- NULL
+Met_AA_Par_Log$Metabolites <- NULL
+Met_AA_Par_TIC$BIO_SAMPLE_ID3_Met <- paste( Met_AA_Par_TIC$BIO_SAMPLE_ID3, "/", Met_AA_Par_TIC$Metabolites)
+Met_AA_Par_TIC$BIO_SAMPLE_ID3 <- NULL
+Met_AA_Par_TIC$Metabolites <- NULL
+Met_AA_Par$BIO_SAMPLE_ID3_Met <- paste( Met_AA_Par$BIO_SAMPLE_ID3, "/", Met_AA_Par$Metabolites)
+Met_AA_Par$BIO_SAMPLE_ID3 <- NULL
+Met_AA_Par$Metabolites <- NULL
+
+Met_AA_pareto <-  merge(Met_AA, Met_AA_Par_LogTIC,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_AA_pareto <-  merge(Met_AA_pareto, Met_AA_Par_Log,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_AA_pareto <-  merge(Met_AA_pareto, Met_AA_Par_TIC,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_AA_pareto <-  merge(Met_AA_pareto, Met_AA_Par,  by = c("BIO_SAMPLE_ID3_Met"))  
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#---(ii) TCA
+
+#Open files
+Met_TCA <- read.csv("Final/Met_TCA.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+Met_TCA$BIO_SAMPLE_ID3_Met <- paste( Met_TCA$BIO_SAMPLE_ID3, "/", Met_TCA$Metabolites)
+
+
+Met_TCA
+colnames(Met_TCA)
+colnames(Met_TCA_Par_Log)
+colnames(Met_TCA_Par_TIC)
+colnames(Met_TCA_pareto)
+
+Met_TCA_Par_LogTIC$BIO_SAMPLE_ID3_Met <- paste( Met_TCA_Par_LogTIC$BIO_SAMPLE_ID3, "/", Met_TCA_Par_LogTIC$Metabolites)
+Met_TCA_Par_LogTIC$BIO_SAMPLE_ID3 <- NULL
+Met_TCA_Par_LogTIC$Metabolites <- NULL
+Met_TCA_Par_Log$BIO_SAMPLE_ID3_Met <- paste( Met_TCA_Par_Log$BIO_SAMPLE_ID3, "/", Met_TCA_Par_Log$Metabolites)
+Met_TCA_Par_Log$BIO_SAMPLE_ID3 <- NULL
+Met_TCA_Par_Log$Metabolites <- NULL
+Met_TCA_Par_TIC$BIO_SAMPLE_ID3_Met <- paste( Met_TCA_Par_TIC$BIO_SAMPLE_ID3, "/", Met_TCA_Par_TIC$Metabolites)
+Met_TCA_Par_TIC$BIO_SAMPLE_ID3 <- NULL
+Met_TCA_Par_TIC$Metabolites <- NULL
+Met_TCA_Par$BIO_SAMPLE_ID3_Met <- paste( Met_TCA_Par$BIO_SAMPLE_ID3, "/", Met_TCA_Par$Metabolites)
+Met_TCA_Par$BIO_SAMPLE_ID3 <- NULL
+Met_TCA_Par$Metabolites <- NULL
+
+Met_TCA_pareto <-  merge(Met_TCA, Met_TCA_Par_LogTIC,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_TCA_pareto <-  merge(Met_TCA_pareto, Met_TCA_Par_Log,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_TCA_pareto <-  merge(Met_TCA_pareto, Met_TCA_Par_TIC,  by = c("BIO_SAMPLE_ID3_Met"))  
+Met_TCA_pareto <-  merge(Met_TCA_pareto, Met_TCA_Par,  by = c("BIO_SAMPLE_ID3_Met")) 
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide", eval="FALSE"}
+#---(iii) MErge Final file
+Met_tot_f <- rbind(Met_TCA_pareto, Met_AA_pareto)
+
+Met_tot_f[is.na(Met_tot_f)] <- 0
+
+#write.csv(Met_tot_f, "Final/Met_tot_f.csv")
+```
+
+The post-preprocessing result comprises a singular table featuring eight distinct columns, each housing diverse values :        
+
+* PEAK_AREA.  
+* PEARK_AREA_TIC.  
+* PEAK_AREA_Log. 
+* PEARK_AREA_TIC_Log. 
+* PEAK_AREA_Scaled. 
+* PEARK_AREA_TIC_Scaled. 
+* PEAK_AREA_Log_Scaled. 
+* PEARK_AREA_TIC_Log_Scaled. 
+
+*****
+
+
+# 2 - Start of the script
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Open dataframe
+Met_Final <- read.csv("Final/Met_tot_f.csv", header=TRUE, sep = ",",  dec=".", row.names=1)
+
+
+#Change 3PG 2PG
+
+Met_Final$Metabolites <- ifelse(Met_Final$Metabolites == "X2.phosphoglyceric.acid..2PG..and..3PG.", "2PG.and.3PG",Met_Final$Metabolites) 
+
+AA <- subset(Met_Final, !Class %in% c("TCA_Glycolysis"))
+TCA <- subset(Met_Final, Class %in% c("TCA_Glycolysis"))
+
+
+```
+
+
+## 2.1 - Calculate PERMANOVA
+
+Calculate differences of metabolic profiles between different Peat extract for BF-SynCom
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="show"}
+#PERMANOVA
+library(vegan)
+Working_file <- Met_Final
+unique(Working_file$Metabolites)
+Working_file <- subset(Working_file, ORGANISM %in% c( "X.BF", "X.X"))
+Working_file <- subset(Working_file, !TREATMENT2 %in% c("Peat.A.B"))
+Working_file <- subset(Working_file, !BIO_SAMPLE_ID3 %in% c("45258_48_X.X_62h_Peat_B.1", "45268_58_X.BF_62h_Peat.A.BF_B.1", "45268_59_X.X_62h_Peat.A.BF_B.1","45258_48_X.X_62h_Peat_B.4", "45258_47_X.X_62h_Peat_B.4")) #Strong outliers
+#Working_file <- subset(Working_file, Time_point %in% c("62h"))
+
+Working_file_tot <- Working_file
+library(dplyr)
+Working_file_tot <- Working_file_tot %>% select(c("BIO_SAMPLE_ID3","PEAK_AREA_TIC_Log","Metabolites"))
+
+Working_file_tot <- subset(Working_file_tot, !BIO_SAMPLE_ID3 %in% c(""))
+
+data <- tidyr::spread(Working_file_tot, Metabolites, PEAK_AREA_TIC_Log)
+data[data == '-Inf'] <- 0
+data <- na.omit(data)   
+
+
+env <- data
+
+library(stringr)
+env[c("Date","Numero_sample","ORGANISM", "Time_point","TREATMENT", "Bio.rep")] <- str_split_fixed(env$BIO_SAMPLE_ID3, '_', 6)
+
+
+env2 <- env[38:43]
+
+row.names(data) <- data$BIO_SAMPLE_ID3
+data$BIO_SAMPLE_ID3 <- NULL
+
+library(vegan)
+data.dist <- vegdist(data, method="canberra")
+
+# default data by terms
+
+#data.div <- adonis2(data ~ BIO_rep*TREATMENT_1*Time_point*ORGANISM, data = env2, permutations = 999, method="canberra")
+
+
+
+#Overall 24h
+data.div.Time <- adonis2(data ~ TREATMENT/Time_point, data = env2, permutations = 999, method="canberra")
+data.div.TREATMENT <- adonis2(data ~ Time_point/TREATMENT, data = env2, permutations = 999, method="canberra")
+data.div.SYNCOM <- adonis2(data ~ TREATMENT/Time_point/ORGANISM, data = env2, permutations = 999, method="canberra")
+
+
+# R-squared value
+R_squared_TIME <- data.div.SYNCOM$R2[2]
+R_squared_TREATMENT <- data.div.SYNCOM$R2[1]
+R_squared_SYNCOM <- data.div.SYNCOM$R2[3]
+
+# p-value
+p.value_TIME <- data.div.SYNCOM$`Pr(>F)`[2]
+p.value_TREATMENT <- data.div.SYNCOM$`Pr(>F)`[1]
+p.value_SYNCOM <- data.div.SYNCOM$`Pr(>F)`[3]
+```
+
+## 2.2 - PcoA metabolic profile (Figure 3.d)
+
+Comparative Metabolic Profiling of Bacteria-Fungi SC (BFSC) for Each Wash.      
+PcoA on the all metabolic profile for BFSC through the chambers.         
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#http://www.sthda.com/french/articles/38-methodes-des-composantes-principales-dans-r-guide-pratique/73-acp-analyse-en-composantes-principales-avec-r-l-essentiel/ 
+library(dplyr)
+Working_file <- Met_Final
+
+Working_file <- subset(Working_file, ORGANISM %in% c("X.BF", "X.X"))
+Working_file <- subset(Working_file, !TREATMENT2 %in% c("Peat.A.B"))
+Working_file <- subset(Working_file, !BIO_SAMPLE_ID3 %in% c("45258_48_X.X_62h_Peat_B.1", "45268_58_X.BF_62h_Peat.A.BF_B.1", "45268_59_X.X_62h_Peat.A.BF_B.1","45258_48_X.X_62h_Peat_B.4", "45258_47_X.X_62h_Peat_B.4")) #Strong outliers
+
+
+
+Met_Final_filtered <- Working_file %>% select(c("BIO_SAMPLE_ID3","Metabolites", "PEAK_AREA_TIC_Log")) #Change second criteria according to what you want analyse.
+
+Met_Final_filtered_Spr <- tidyr::spread(Met_Final_filtered, key = Metabolites, value = PEAK_AREA_TIC_Log)
+
+Met_Final_filtered_Spr[is.na(Met_Final_filtered_Spr)] <- 0
+Met_Final_filtered_Spr[Met_Final_filtered_Spr == '-Inf'] <- 0
+
+#Met_Final_filtered_Spr <- na.omit(Met_Final_filtered_Spr) 
+
+
+row.names(Met_Final_filtered_Spr) <- Met_Final_filtered_Spr$BIO_SAMPLE_ID3
+Met_Final_filtered_Spr$BIO_SAMPLE_ID3 <- NULL
+library("FactoMineR")
+library("factoextra")
+
+
+res.pca <- PCA(Met_Final_filtered_Spr, graph = FALSE)
+
+#Check percent of variation
+plot_percent <- fviz_eig(res.pca, addlabels = TRUE, ylim = c(0, 100))
+
+Dim1 <- capture.output(cat(round(res.pca$eig[1,2], digits = 2), "%"))
+Dim2 <- capture.output(cat(round(res.pca$eig[2,2], digits = 2), "%"))
+
+res.pca$eig
+res.pca$svd
+
+library(data.table)
+data_plotting <- data.frame(res.pca$ind$coord)
+data_plotting$SP1 <- row.names(data_plotting)
+
+#Concatenate metadata
+
+library(stringr)
+data_plotting2 <- data_plotting
+data_plotting2[c("Date","Number", "ORGANISM","Time_point", "TREATMENT", "Bio_rep")] <- str_split_fixed(row.names(data_plotting2), '_', 6)
+
+#Remove Pool
+
+data_plotting2 <- subset(data_plotting2, !ORGANISM %in% c("Pool", "pool"))
+
+
+#Plot
+#Claculate for segments
+points_pcoa = data.frame(data_plotting2 %>% 
+                group_by(Time_point, TREATMENT, ORGANISM) %>% 
+                mutate(meanX=mean(Dim.1), meanY=mean(Dim.2)))
+
+
+#Plot full with all conditions
+#Claculate for segments
+points_pcoa = data.frame(data_plotting2 %>% 
+                group_by(Time_point, TREATMENT, ORGANISM) %>% 
+                mutate(meanX=mean(Dim.1), meanY=mean(Dim.2)))
+points_pcoa$ORGANISM_TimePoint <- paste(points_pcoa$ORGANISM, points_pcoa$Time_point, sep = "-")
+
+# Create a new column in your data that combines ORGANISM and New_Parameter
+data_plotting2$ORGANISM_TimePoint <- paste(data_plotting2$ORGANISM, data_plotting2$Time_point, sep = "-")
+
+
+# Now, update your ggplot code to include this new parameter
+Figure3d <- ggplot() + 
+   geom_segment(data = points_pcoa, mapping = aes(x = meanX, y = meanY, xend = Dim.1, yend = Dim.2, color = TREATMENT), size = 0.5, alpha = 0.4) +
+  geom_jitter(data = data_plotting2, aes(x = Dim.1, y = Dim.2, shape = ORGANISM_TimePoint, color = TREATMENT), alpha = 1, size = 0.4) + 
+  geom_point(data = points_pcoa, aes(x = meanX, y = meanY, shape = ORGANISM_TimePoint, color = TREATMENT), size = 4, alpha = 1) +
+  ggtitle("Targeted metabolic profiles (n=41)") + 
+   geom_hline(yintercept = 0, linetype = "dashed", color = "#585858") +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "#585858") +
+  xlab(paste("PCoA1", Dim1)) + ylab(paste("PCoA2",Dim2)) +
+  theme(strip.background = element_rect(color = "white", fill = "#585858", size = 1, linetype = "solid"), 
+        strip.text.x = element_text(size = 12, color = "white"), 
+        strip.text.y = element_text(size = 12, color = "white")) +
+  scale_color_manual('Sterile washes', labels = c("Peat", "Peat + Plant", "Peat + Plant + SynCom"), values = c("#DDD5D0", "#988071", "#3B312B")) +
+ 
+  geom_text(aes(x = 2, y = 4.5, label = paste("Time Point : ", round(R_squared_TIME * 100, digits = 3), "% of variance; p =", format(p.value_TIME, digits = 2))), color = "black", size = 2.5) +
+  geom_text(aes(x = 2, y = 4, label = paste("Sterile washes : ", round(R_squared_TREATMENT * 100, digits = 3), "% of variance; p =", format(p.value_TREATMENT, digits = 2))), color = "black", size = 2.5) +
+geom_text(aes(x = 2, y = 3.5, label = paste("SynCom : ",round(R_squared_SYNCOM*100, digits = 3), "% of variance; p =", format(p.value_SYNCOM, digits = 2))), color = "black", size = 2.5) +
+  scale_shape_manual(values = c(17, 19, 2, 1), labels = c("BFSC 24h", "BFSC 62h", "MF 24h", "MF 62h")) 
+Figure3d
+```
+
+## 2.3 - Log2FC plot (Figure 3.e)  
+
+In this part I compare the abundance of metabolites between sterile extracts when inoculated with BF-SynCom Versus Mock (non-inoculated)      
+   
+### 2.2.1 - Prepare data
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Prepare table
+# - Full LOG2 plot with significant 
+
+DESeq <- Met_Final
+
+#Keep timepoint 62hours and remove the sterile wash conditioned with Plant and Bacteria
+DESeq <- subset(DESeq, Time_point %in% c("62h"))
+DESeq <- subset(DESeq, ORGANISM2 %in% c("Media.BacteriaFungi", "Media.Media") & !TREATMENT2 %in% c("Peat.A.B"))
+
+#Add concat column                           
+library(dplyr)
+DESeq$concat <- paste( DESeq$Metabolites, "-", DESeq$TREATMENT2)
+         
+                                
+DESeq_Soil <-DESeq #subset(DESeq, TREATMENT2 %in% c("Peat.A"))  
+
+
+#Create what to compare
+DESeq_Soil$Met_Treat <- paste(DESeq_Soil$TREATMENT2, "_",DESeq_Soil$Metabolites)
+
+
+#Control Media
+DESeq_Soil_med.med.bac <- subset(DESeq_Soil, ORGANISM2 %in% c("Media.Media"))
+Table_Peat_mean_bac <- aggregate(DESeq_Soil_med.med.bac$PEAK_AREA_TIC, list(DESeq_Soil_med.med.bac$concat), FUN=median)
+colnames(Table_Peat_mean_bac) <- c("concat", "Mean_Media")
+
+#Split
+library(stringr)
+Table_Peat_mean_bac[c("Metabolites","TREATMENT22")] <- str_split_fixed(Table_Peat_mean_bac$concat, ' - ', 2)
+
+#Create what to compare
+Table_Peat_mean_bac$Met_Treat <- paste(Table_Peat_mean_bac$TREATMENT22, "_", Table_Peat_mean_bac$Metabolites)
+
+#Prepare merge
+DESeq_Soil.bac <- subset(DESeq_Soil, ORGANISM2 %in% c("Media.BacteriaFungi"))
+
+#Final merge
+DESeq_Soil.bac.f <-  merge(DESeq_Soil.bac, Table_Peat_mean_bac,  by = c("Met_Treat"))  
+
+#Calculate log2FC
+DESeq_Soil.bac.f['Mean_Media'][DESeq_Soil.bac.f['Mean_Media'] == 0] <- 0.1
+
+DESeq_Soil.bac.f$log2FC <- (log2(DESeq_Soil.bac.f$PEAK_AREA_TIC))-(log2(DESeq_Soil.bac.f$Mean_Media))
+
+
+#_INF = Not detected put -5
+DESeq_Soil.bac.f
+DESeq_Soil.bac.f['log2FC'][DESeq_Soil.bac.f['log2FC'] == '-Inf'] <- -5
+DESeq_Soil.bac.f['log2FC'][DESeq_Soil.bac.f['log2FC'] <  -5] <- -5
+
+#DATA_Log2_PEAT2 <-  subset(DATA_Log2_PEAT2, !log2FC %in% c("NaN"))
+
+#DESeq_Soil.bac.f['log2FC'][DESeq_Soil.bac.f['log2FC'] == '0'] <- -5
+#DESeq_Soil.bac.f['log2FC'][DESeq_Soil.bac.f['log2FC'] == '0'] <- -5
+
+
+#Prepare color
+DESeq_Soil.bac.f$TREATMENT22
+
+Table_S <- DESeq_Soil.bac.f %>% group_by(ORGANISM2,Metabolites.y,TREATMENT22) %>% summarise (log2FC_med = median(log2FC))
+
+Table_S$concat <-  paste(Table_S$Metabolites.y, "-",Table_S$ORGANISM2, "_", Table_S$TREATMENT22 )
+
+Table_S$ORGANISM2 <- NULL
+Table_S$Metabolites.y <- NULL
+Table_S$TREATMENT22 <- NULL
+
+DESeq_Soil.bac.f$concat <-  paste(DESeq_Soil.bac.f$Metabolites.y, "-",DESeq_Soil.bac.f$ORGANISM2, "_", DESeq_Soil.bac.f$TREATMENT22 )
+
+
+
+Final_tab <- merge(x = Table_S, y = DESeq_Soil.bac.f, by = c("concat"))
+
+#Keep only what is significant
+Final_tab$Significant <-   ifelse(Final_tab$log2FC_med >= 1 , "Significant",
+                           ifelse(Final_tab$log2FC_med <= -1, "Significant","Non Significant"))
+
+DATA_Log2_PEAT2_f <- Final_tab
+```
+
+### 2.2.2 - Prepare data
+
+**Stats:**    
+We performed a Kruskal-Wallis test followed by a post-hoc Dunn test to assess the significance of differences in Metabolites abundance between Microbial conditions (BSC, FSC and BFSC) for each specific wash.      
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+
+#Calculate significance between BSC, FSC and BFSC for each individual metabolite in each individual wash.
+library(dplyr)
+library(dunn.test)
+
+#Load dataset Change accordingle (Table_f_S or Table_f_C)
+df <- Final_tab
+
+#Filter one with -7
+df_filtered <- subset(df, !Metabolites.x %in% c("alpha.ketoglutaric.acid", "fumaric.acid") )
+
+#Load again
+df <- df_filtered
+df$Metabolites.x_Class <- paste0(df$Metabolites.x, "/", df$Class)
+
+
+# Get unique conditions
+unique_conditions <- unique(df$Metabolites.x_Class)
+
+# Create empty data frames to store the results
+kruskal_results <- data.frame()
+dunn_results <- data.frame()
+
+# Loop over unique conditions and perform tests
+for (condition in unique_conditions) {
+  # Subset the data for the current condition
+  subset_data <- df[df$Metabolites.x_Class == condition, ]
+  
+  # Perform Kruskal-Wallis test
+  kruskal_result <- kruskal.test(log2FC ~ TREATMENT2, data = subset_data)
+  
+  # Perform Dunn's test for post hoc comparisons
+  dunn_result <- dunn.test(subset_data$log2FC, g = subset_data$TREATMENT2, method = "bh")
+  
+  # Store the results in data frames
+  kruskal_results <- rbind(kruskal_results, c(Condition = condition, kruskal_result$P.adjusted))
+  dunn_results <- rbind(dunn_results, data.frame(dunn_result$comparison, dunn_result$P.adjusted, condition))
+}
+
+# Print Kruskal-Wallis results
+print(kruskal_results)
+
+# Print Dunn test results
+print(dunn_results)
+
+#Create groups letters
+library(rcompanion)
+
+# Create empty data frames to store the results
+groups_results <- data.frame()
+
+for (condition in unique_conditions) {
+  # Subset the data for the current condition
+  subset_data <- dunn_results[dunn_results$condition == condition, ]
+   
+  group <- cldList(comparison = subset_data$dunn_result.comparison, 
+                    p.value    = subset_data$dunn_result.P.adjusted,
+                    threshold  = 0.05)
+  # Create a data frame for the results of the current condition
+  condition_results <- data.frame(Condition = condition,
+                                  Group = group$Group,
+                                  Letter = group$Letter,
+                                  MonoLetter = group$MonoLetter)
+  
+# Append the results to the groups_results data frame
+  groups_results <- rbind(groups_results, condition_results)
+
+}
+groups_results
+
+# Splitting the column into two
+library(tidyr)
+groups_results <- separate(groups_results, Condition, into = c("Metabolite.y", "Class"), sep = "/")
+
+#Arrange table to match the plot
+colnames(groups_results) <- c("Metabolites.y","Class","TREATMENT2", "Letter", "MonoLetter")
+groups_results$ORGANISM2 <- c("Media.BacteriaFungi")
+```
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+
+#REmove Metabolites which are not signficiant in any condition
+Final_tab$remove <- ifelse(Final_tab$Significant == "Non Significant", 1,2)
+
+REMOVE <- Final_tab %>%  
+  group_by(Metabolites.y) %>% 
+  summarize(mean=mean(remove)) 
+
+To_remove <- subset(REMOVE, mean %in% c(1) )
+
+
+#Remove eveything between 0.5 and -0.5 (non significant)
+Final_tab_f <- subset(Final_tab, !Metabolites.y %in% c(To_remove$Metabolites.y))
+groups_results <- subset(groups_results, !Metabolites.y %in% c(To_remove$Metabolites.y))
+
+#Change 3PG 2PG
+Final_tab_f$Metabolites.y <- ifelse(Final_tab_f$Metabolites.y == "X2.phosphoglyceric.acid..2PG..and..3PG.", "2PG.and.3PG",Final_tab_f$Metabolites.y) 
+
+
+groups_results$Metabolites.y <- ifelse(groups_results$Metabolites.y == "X2.phosphoglyceric.acid..2PG..and..3PG.", "2PG.and.3PG",groups_results$Metabolites.y) 
+
+#Remove GABA (non significant)
+Final_tab_f <- subset(Final_tab_f, !Metabolites.y %in% c("GABA_1Bz"))
+groups_results <- subset(groups_results, !Metabolites.y %in% c("GABA_1Bz"))
+
+#Plot
+#Order
+x = tapply(Final_tab_f$log2FC_med, Final_tab_f$Metabolites.y, function(x) max(x))
+x = sort(x, FALSE)
+Final_tab_f$Metabolites.y = factor(as.character(Final_tab_f$Metabolites.y), levels=names(x))
+
+#PLOT
+
+#Order
+x = tapply(Final_tab_f$log2FC_med, Final_tab_f$Metabolites.y, function(x) max(x))
+x = sort(x, FALSE)
+Final_tab_f$Metabolites.y = factor(as.character(Final_tab_f$Metabolites.y), levels=names(x))
+
+
+#Change facet_grid names
+Class_names <- setNames(c("Amino Acids", "TCA Glycolysis"), c("Amino_Acids", "TCA_Glycolysis"))
+
+
+#Plot
+Plot_bac <- ggplot(data=Final_tab_f, 
+                             aes_string(x='Metabolites.y',y='log2FC', fill = 'TREATMENT2')) + # Significant Or ORGANISM2
+  geom_boxplot(outlier.shape = NA, alpha = 0.8, size = 0.2) +
+  geom_point(alpha=1, size = 0.5, position = position_dodge(width=0.75),data=Final_tab_f, 
+                             aes_string(color = 'TREATMENT2')) +
+  theme(
+        strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        strip.text.y = element_text(size = 12, color = "white"),
+        axis.title.y = element_text( size = 12),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(angle = 90,  hjust=1), 
+        axis.text.y = element_text())+  
+  ylab ("Log2FC") + xlab ("") +
+   facet_grid(~Class, space="free", scale = "free", labeller = labeller(Class =Class_names)) +
+  geom_hline(yintercept = c(0.5,-0.5), linetype="dashed", size=0.5) +
+  ggtitle("Log 2 FC relative to the washes")+
+       scale_fill_manual('Sterile washes',labels = c("Peat", "Peat + Plant", "Peat + Plant + SynCom"), values=c("#DDD5D0", "#988071", "#3B312B" )) +
+     scale_color_manual('Sterile washes',labels = c("Peat", "Peat + Plant", "Peat + Plant + SynCom"), values=c("#DDD5D0", "#988071", "#3B312B" )) +
+        geom_text( data    = groups_results, mapping = aes(x =Metabolites.y , y = 4, label = Letter), size = 4,position = position_dodge(width=0.75))
+Plot_bac #CE PLOT
+
+
+
+```
+
+*****
+
+# End of script
+      
+Author : Guillaume Chesneau     
+[X](https://twitter.com/Chesneau_G).   
+[Researchgate](https://www.researchgate.net/profile/Guillaume-Chesneau-3).   
+[Google Scholar](https://scholar.google.fr/citations?user=ywzDf3QAAAAJ&hl=fr&oi=ao). 
+
+MPIPZ Cologne,  [Hacquard's group](https://www.mpipz.mpg.de/hacquard).   
+
+*****
