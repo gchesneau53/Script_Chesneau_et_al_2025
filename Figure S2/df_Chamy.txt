@@ -1,0 +1,30 @@
+Rep		Media	Pump	Bottle	Condition	Chamber	Chamber	Combinaison	Plate	Well	Comment	Collect	OD600	OD720	16S	ITS	Cell_Count_raw	Cell_Count	Log_Cell_Count
+9	5	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_C	P1	A9	Failed tube	150	NA	NA	NA	NA	683.4	6834000	6.834674974
+11	6	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_C	P1	A11		150	NA	NA	NA	NA	373.4	3734000	6.572174314
+13	7	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_C	P1	B1		150	NA	NA	NA	NA	289	2890000	6.460897843
+15	8	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_C	P1	B3		150	NA	NA	NA	NA	457.6	4576000	6.660486016
+17	9	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_BSC	P1	B5		150	NA	NA	NA	NA	639.2	6392000	6.805636766
+19	10	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_BSC	P1	B7		150	NA	NA	NA	NA	612.5	6125000	6.787106093
+21	11	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_BSC	P1	B9		150	NA	NA	NA	NA	379.4	3794000	6.579097327
+23	12	TP10	1	1	Microchamber	Chlam	Chamber1	Chlam_BSC	P1	B11		150	NA	NA	NA	NA	310.6	3106000	6.492201451
+33	17	TP10	1	2	Microchamber	Chlam	Chamber1	Chlam_FSC	P1	C9		150	NA	NA	NA	NA	400	4000000	6.602059991
+35	18	TP10	1	2	Microchamber	Chlam	Chamber1	Chlam_FSC	P1	C11		150	NA	NA	NA	NA	359.7	3597000	6.555940438
+37	19	TP10	1	2	Microchamber	Chlam	Chamber1	Chlam_FSC	P1	D1		150	NA	NA	NA	NA	513	5130000	6.710117365
+39	20	TP10	1	2	Microchamber	Chlam	Chamber1	Chlam_FSC	P1	D3		150	NA	NA	NA	NA	462.05	4620500	6.664688975
+58	34	Inoculum	NA	NA	Inoculum	Chlam	Chamber1	Inoculum	P1	NA	NA	NA	NA	0.2	NA	NA	257.95	2579500	6.411535532
+59	35	Inoculum	NA	NA	Inoculum	Chlam	Chamber1	Inoculum	P1	NA	NA	NA	NA	0.2	NA	NA	268.95	2689500	6.429671549
+60	36	Inoculum	NA	NA	Inoculum	Chlam	Chamber1	Inoculum	P1	NA	NA	NA	NA	0.2	NA	NA	251.95	2519500	6.401314363
+61	37	Inoculum	NA	NA	Inoculum	Chlam	Chamber1	Inoculum	P1	NA	NA	NA	NA	0.2	NA	NA	242.95	2429500	6.385516903
+58	34	Inoculum	NA	NA	Inoculum	Chlam	Chamber2	Inoculum	P1	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA
+59	35	Inoculum	NA	NA	Inoculum	Chlam	Chamber2	Inoculum	P1	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA
+60	36	Inoculum	NA	NA	Inoculum	Chlam	Chamber2	Inoculum	P1	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA
+61	37	Inoculum	NA	NA	Inoculum	Chlam	Chamber2	Inoculum	P1	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA
+49	25	Bottle	1	1	TP10_Bottle	Control	Control	Control	P1	E1		150	NA	NA	NA	NA	NA	NA	NA
+50	26	Bottle	1	1	TP10_Bottle	Control	Control	Control	P1	E2		150	NA	NA	NA	NA	NA	NA	NA
+51	27	Bottle	1	1	TP10_Bottle	Control	Control	Control	P1	E3		150	NA	NA	NA	NA	NA	NA	NA
+52	28	Bottle	1	2	TP10_Bottle	Control	Control	Control	P1	E4		150	NA	NA	NA	NA	NA	NA	NA
+53	29	Bottle	1	2	TP10_Bottle	Control	Control	Control	P1	E5		150	NA	NA	NA	NA	NA	NA	NA
+54	30	Bottle	1	2	TP10_Bottle	Control	Control	Control	P1	E6		150	NA	NA	NA	NA	NA	NA	NA
+55	31	TP10_Control	1	0	TP10_Media	Control	Control	Control	P1	E7		150	NA	NA	NA	NA	NA	NA	NA
+56	32	TP10_Control	1	0	TP10_Media	Control	Control	Control	P1	E8		150	NA	NA	NA	NA	NA	NA	NA
+57	33	TP10_Control	1	0	TP10_Media	Control	Control	Control	P1	E9		150	NA	NA	NA	NA	NA	NA	NA

@@ -1,0 +1,223 @@
+---
+title: "MetaFlowTrain: a highly parallelized and modular fluidic system for studying exometabolite-mediated inter-organismal interactions"
+author: "Guillaume Chesneau (Max Planck Institute, Cologne, Germany)."
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    df_print: paged
+  html_document:
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+  word_document:
+    toc: yes
+    code_folding: hide
+  pdf_document:
+    toc: yes
+Script author: "Guillaume Chesneau"
+contact: gchesneau@mpipz.mpiz.mpg.de
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(cache=FALSE, autodep = TRUE, warning = FALSE)
+#Set working direction
+knitr::opts_knit$set(root.dir = "") 
+```
+
+This script has been made on R 4.2.2 (and Rstudio 2022.12.0+353)
+```{r R version}
+R.version
+#Load theme set
+library(ggplot2)
+theme_set(theme_bw())
+```
+
+
+
+
+
+*****
+
+# A] Figure S4 b
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Prepare tables
+
+Teeth <- read.table(file="Chamber_teeth_assay.txt",sep="\t",dec = ".",header=TRUE)
+Teeth
+```
+*Plot with statistics.*   
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+library(ggplot2)
+# Create a stacked bar plot
+
+Teeth$Bin <- as.character(Teeth$Bin)
+
+Plot <- ggplot(Teeth, aes(x = Chamber, fill = Bin)) +
+  geom_bar(position = "fill") +
+  labs(x = "Chamber", y = "Proportion", title = "Chamber design, bottom test") +
+  scale_fill_manual(values = c("0" = "#C1C4B8", "1" = "#161615"),
+                    name = "Microchamber train",  # Change the legend title here
+                    labels = c("Failed", "Successful")) +  # Change the legend labels here) +
+  facet_grid(~Community) +
+    theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        axis.title.x = element_text( size = 12, face = "bold"),
+        axis.title.y = element_text( size = 12, face = "bold"),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(face = "bold", angle = 90), 
+        axis.text.y = element_text(face = "bold"))
+
+
+#Plot + stats
+PlotB <- ggplot(Teeth, aes(x = Chamber, fill = Bin)) +
+  geom_bar(position = "fill") +
+  labs(x = "Chamber", y = "Proportion", title = "") +
+  scale_fill_manual(values = c("0" = "#C1C4B8", "1" = "#161615"),
+                    name = "Microchamber train",  # Change the legend title here
+                    labels = c("Failed", "Successful")) +  # Change the legend labels here) +
+  facet_grid(~Community) +
+    theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        axis.title.x = element_text( size = 12, face = "bold"),
+        axis.title.y = element_text( size = 12, face = "bold"),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(face = "bold", angle = 90), 
+        axis.text.y = element_text(face = "bold")) + 
+        geom_segment(data = data.frame(Community = "BFSC", x1 = 1, x2 = 2, y1 = 1.02, y2 = 1.02, Bin = c("B1")), aes(x = x1, xend = x2, y = y1, yend = y2)) +
+ geom_text(data = data.frame(x = 1.5, y = 1.02, label = "*", Community = c("BFSC"), Bin = c("B1"), Chamber = c("ok")),aes(x = x, y = y, label = label),  size = 8) +
+ geom_text(data = data.frame(x = 1, y = -0.02, label = "n=24", Community = c("BFSC", "MgCL2"), Bin = c("B1"), Chamber = c("Flat", "Theeth")),aes(x = x, y = y, label = label),  size = 3.5) +
+ geom_text(data = data.frame(x = 2, y = -0.02, label = "n=24", Community = c("BFSC", "MgCL2"), Bin = c("B1"), Chamber = c("Flat", "Theeth")),aes(x = x, y = y, label = label),  size = 3.5) +
+    ggtitle("")
+
+PlotB
+```
+
+
+
+
+
+*****
+
+# A] Figure S4 c
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+#Prepare tables
+
+F_R <- read.table(file="Chamber_teeth_assay.txt",sep="\t",dec = ".",header=TRUE)
+
+
+#Prepare table
+library(tidyr)
+library(ggplot2)
+
+# Combine columns with flow rate into a new column
+F_R2 <- F_R %>%
+  pivot_longer(cols = c(Flow_t0,	Flow_t15,	Flow_t25,	Flow_t39,	Flow_t48,Flow_t63,	Flow_t72),
+               names_to = "Flow_rate",
+               values_to = "ul.min")
+
+# Use gsub to extract numbers from the 'text' column and create 'numbers_only' column
+F_R2$Time <- as.numeric(gsub("[^0-9]", "", F_R2$Flow_rate))
+
+#Plot Flow rate
+# Create a line plot
+Plot <- ggplot(F_R2, aes(x = Time, y = ul.min, color = Chamber)) +
+  geom_jitter(size = 1, alpha = 0.2) +
+   geom_smooth(se = FALSE, aes( linetype = Chamber)) +
+  ylim(0,10) + xlim (0,72) +
+  xlab("Time (hours)") + 
+  theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        axis.title.x = element_text( size = 12, face = "bold"),
+        axis.title.y = element_text( size = 12, face = "bold"),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(face = "bold", angle = 90), 
+        axis.text.y = element_text(face = "bold")) +
+  facet_grid(~Community) +
+  scale_color_manual(values=c("#000000", "#b96a00"))
+
+
+```
+
+**Stats:** We conducted multiple t-tests to compare the differences in flow rate between the toothed and flat chambers at each time point.  
+
+  
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+# Load necessary packages
+library(PMCMRplus)
+library(dunn.test)
+
+df <- subset(F_R2, !Community %in% c("BFSC"))
+
+# List of time points
+time_points <- unique(df$Time)
+
+# Create a function to perform t-test for a specific time point
+perform_t_tests <- function(data) {
+  time_points <- unique(df$Time)
+  t_test_results <- list()
+  
+  for (time_point in time_points) {
+    subset_df <- subset(data, Time == time_point)
+    
+    if (nrow(subset_df) >= 2) {
+      t_test_result <- t.test(ul.min ~ Chamber, data = subset_df)
+      t_test_results[[as.character(time_point)]] <- t_test_result
+    }
+  }
+  
+  return(t_test_results)
+}
+
+# Perform t-tests for each time point
+t_test_results <- perform_t_tests(df)
+
+result_df <- do.call(rbind, t_test_results)
+
+ # Extract relevant information from t-test results
+ok <- data.frame(Time = time_points, p_value = sapply(t_test_results, function(x) x$p.value))
+```
+
+
+*Plot with statistics.*    
+```{r, echo=FALSE, warning=FALSE, message=FALSE, results="hide"}
+
+# Create a line plot
+PlotC <- ggplot(F_R2, aes(x = Time, y = ul.min, color = Chamber)) +
+  geom_jitter(size = 1, alpha = 0.1) +
+   geom_smooth(aes( linetype = Chamber)) +
+  ylim(0,10) + xlim (0,72) +
+  xlab("Time (Hours)") +
+  ylab("Flow rate (μl.min-1)") +
+  theme(strip.background = element_rect(color="white", fill="#585858", size=1, linetype="solid"),
+        strip.text.x = element_text(size = 12, color = "white"),
+        axis.title.x = element_text( size = 12, face = "bold"),
+        axis.title.y = element_text( size = 12, face = "bold"),
+        plot.title = element_text(size = 16),
+        axis.text.x = element_text(face = "bold", angle = 90), 
+        axis.text.y = element_text(face = "bold")) +
+  facet_grid(~Community) + 
+  geom_text(data = data.frame(x = 39, y = 6, label = "", Community = c("BFSC"), Chamber = c("Flat")),aes(x = x, y = y, label = label),  size = 8) + 
+  geom_text(data = data.frame(x = 48, y = 6, label = "", Community = c("BFSC"), Chamber = c("Flat")),aes(x = x, y = y, label = label),  size = 8)+ 
+  geom_text(data = data.frame(x = 63, y = 6, label = "*", Community = c("BFSC"), Chamber = c("Flat")),aes(x = x, y = y, label = label),  size = 8)+ 
+  geom_text(data = data.frame(x = 72, y = 6, label = "", Community = c("BFSC"), Chamber = c("Flat")),aes(x = x, y = y, label = label),  size = 8) +
+  scale_color_manual(values=c("#000000", "#b96a00")) +
+    ggtitle("")
+  
+  PlotC
+```
+
+
+
+
+*****
+
+# End of script
+
+*****
